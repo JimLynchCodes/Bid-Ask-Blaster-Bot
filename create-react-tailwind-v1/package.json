@@ -1,0 +1,35 @@
+{
+  "name": "create-react-tailwind-v-1",
+  "description": "description",
+  "version": "0.0.0",
+  "author": "JimLynchCodes <mrdotjim@gmail.com>",
+  "scripts": {
+    "start": "npm run tailwind:build && react-scripts start",
+    "build": "npm run tailwind:build && react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "tailwind:build": "tailwind build src/styles/tailwind.css -o src/styles/app.css",
+    "build-old": "tsup src/cli.ts --minify",
+    "clean-old": "shx rm -rf lib",
+    "dev-old": "tsup src/cli.ts --watch",
+    "prepublishOnly-old": "npm run clean && npm run build"
+  },
+  "bin": "dist/cli.js",
+  "files": [
+    "dist",
+    "templates"
+  ],
+  "dependencies": {
+    "autoprefixer": "^9.8.6",
+    "create-create-app": "^7.0.0",
+    "postcss": "^7.0.35",
+    "react-scripts": "^4.0.3",
+    "tailwindcss": "^2.0.3"
+  },
+  "devDependencies": {
+    "postcss-cli": "^8.3.1",
+    "tsup": "^3.6.1",
+    "typescript": "^4.0.2"
+  },
+  "license": "AGPL-3.0"
+}
