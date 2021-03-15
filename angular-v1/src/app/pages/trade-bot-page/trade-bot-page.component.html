@@ -1,0 +1,215 @@
+<div class="content" role="main">
+
+  <div class="card border border-primary rounded flex-grow-1 h-auto text-dark flex-column m-4 px-3 py-3">
+
+    <h4>
+      Underlying To Trade
+    </h4>
+    <p>
+      Select the underlying asset the bot will trade.
+    </p>
+
+    <ng-container *ngFor="let ticker of possibleTickers">
+      <div class="form-check py-2">
+        <input class="form-check-input" type="radio" name="possibleTickersRadio" id="flexRadioDefault2"
+          [checked]="ticker === 'GME'">
+        <label class="form-check-label" for="flexRadioDefault2">
+          <span class="card rounded px-1">
+            {{ticker}}
+          </span>
+        </label>
+      </div>
+    </ng-container>
+
+  </div>
+
+  <div class="card border border-primary rounded flex-grow-1 h-auto text-dark flex-column m-4 px-3 py-3">
+
+    <h4>
+      Bet Size
+    </h4>
+    <p>
+      Choose how many shares the bot should trade for each order.
+    </p>
+
+    <ng-container *ngFor="let betSize of possibleBetSizes">
+      <div class="form-check py-2">
+        <input class="form-check-input" type="radio" name="betSizeRadio" id="flexRadioDefault5"
+          [checked]="betSize === '1'">
+        <label class="form-check-label" for="flexRadioDefault5">
+          <span class="card rounded px-1">
+            {{betSize}}
+          </span>
+        </label>
+      </div>
+    </ng-container>
+
+  </div>
+
+  <div class="card border border-primary rounded flex-grow-1 h-auto text-dark flex-column m-4 px-3 py-3">
+
+    <h4>
+      Account To Use
+    </h4>
+    <p>
+      Select the account which the bot will trade out of.
+    </p>
+
+    <!-- {{accountsData[0] | json}} -->
+
+    <ng-container *ngFor="let account of accountsData">
+      <div class="form-check py-3 ">
+        <input class="form-check-input" type="radio" name="accountToUseRadio" id="flexRadioDefault2"
+          [disabled]="!account.securitiesAccount.isDayTrader">
+        <label class="form-check-label" for="flexRadioDefault2">
+          <div class="card border border-primary rounded px-2 py-2">
+            {{account.securitiesAccount.accountId | pMask}}
+            <br />
+            {{account.securitiesAccount.type}}
+            <br />
+            Day Trading Allowed: {{account.securitiesAccount.isDayTrader ? "✅" : "🚫" }}
+            <br />
+            <br />
+            Cash: ${{account.securitiesAccount.freeCash | moneyWithCommas}}
+            <br />
+            Shares of {{underlyingToTrade}}: {{sharesOfUnderlyingCurrentlyHeld}}
+            <br />
+          </div>
+        </label>
+      </div>
+    </ng-container>
+
+
+    <div class="card-body p-x1 py-1 mt-1 d-flex flex flex-grow-1 flex-row justify-content-around text-center">
+
+    </div>
+  </div>
+
+  <div class="card border border-primary rounded flex-grow-1 h-auto text-dark flex-column m-4 px-2 py-2">
+
+    <h4>
+      The bot is currently: {{ botIsRunning ? "Running!" : "NOT running."}}
+    </h4>
+
+    <div class="card-body p-x1 py-1 mt-1 d-flex flex flex-grow-1 flex-row justify-content-around text-center">
+
+      <ng-container *ngIf="!botIsRunning">
+        <button type="button" class="btn btn-success btn-sm" (click)="startBotRunning()"
+          tooltip="Starts the bot running!">
+          Start
+        </button>
+      </ng-container>
+
+      <ng-container *ngIf="botIsRunning">
+        <button type="button" class="btn btn-success btn-sm" (click)="stopBotRunning()" tooltip="Stops the bot!">
+          Stop
+        </button>
+      </ng-container>
+    </div>
+  </div>
+
+  <div class="card border border-primary rounded flex-grow-1 h-auto text-dark flex-column m-4 px-4 py-4"
+    *ngIf="botIsRunning">
+
+    <div class="d-flex flex-row justify-content-between">
+
+      <div>
+        bot is running on:
+        <h4>
+          <!-- {{selectTickerLabel}} -->
+          GME
+        </h4>
+      </div>
+    
+      <div>
+        Session P/L:
+        <h4>
+          $0.00
+        </h4>
+      </div>
+    
+      
+    </div>
+
+    <br />
+
+    {{botThinkingMessage}}
+
+    <br />
+    <br />
+    
+    <div class="border-top border-primary my-2"></div>
+    <br />
+    <table class="table table-bordered border-primary">
+      <thead>
+        <tr>
+          <th scope="col">Working<br />Orders</th>
+          <th scope="col">Buy</th>
+          <th scope="col">Sell</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <th scope="col">Qty & Price</th>
+          <td>1&nbsp;&nbsp;@&nbsp;&nbsp;$322.05</td>
+          <td> -- </td>
+        </tr>
+      </tbody>
+    </table>
+    
+    <div class="border-top border-primary my-2"></div>
+    <br />
+
+    <table class="table">
+      <thead>
+        <tr>
+          <th scope="col">Realtime<br />Quotes</th>
+          <th scope="col">52w<br/>Low</th>
+          <th scope="col">Day Low</th>
+          <th scope="col">Bid</th>
+          <th scope="col">Last</th>
+          <th scope="col">Mark</th>
+          <th scope="col">Ask</th>
+          <th scope="col">Day High</th>
+          <th scope="col">52w<br/>High</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <th scope="row">GME</th>
+          <!-- <td>{{lastQuotes['GME'] | json}}</td> -->
+          <td>{{lastQuotes['GME']['52WkLow']}}</td>
+          <td>{{lastQuotes['GME']['lowPrice']}}</td>
+          <td>{{lastQuotes['GME']['bidPrice']}}</td>
+          <td>{{lastQuotes['GME']['lastPrice']}}</td>
+          <td>{{lastQuotes['GME']['mark']}}</td>
+          <td>{{lastQuotes['GME']['askPrice']}}</td>
+          <td>{{lastQuotes['GME']['highPrice']}}</td>
+          <td>{{lastQuotes['GME']['52WkHigh']}}</td>
+        </tr>
+
+        <!-- <tr>
+          <th scope="row">Working<br/>Orders</th> -->
+        <!-- <th scope="row">2</th> -->
+        <!-- <td>Jacob</td>
+          <td>Thornton</td>
+          <td>@fat</td>
+        </tr> -->
+        <!-- <tr>
+          <th scope="row">3</th>
+          <td>Larry</td>
+          <td>the Bird</td>
+          <td>@twitter</td>
+        </tr> -->
+      </tbody>
+    </table>
+
+
+  </div>
+
+  <br />
+  <br />
+  <br />
+  <br />
+
+</div>
