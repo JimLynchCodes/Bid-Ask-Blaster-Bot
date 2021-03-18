@@ -6,12 +6,7 @@ import { BehaviorSubject } from 'rxjs';
 })
 export class ToastManagerService {
 
-  toasts: any = [{
-    id: 1,
-    type: 'success',
-    msg: `Noice shares of MSFT @ $15.04 each.`,
-    timeout: 5000
-  }]
+  toasts: any = []
 
   toastStream = new BehaviorSubject(this.toasts)
 

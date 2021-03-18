@@ -23,8 +23,6 @@ export class MoneyWithCommasPipe implements PipeTransform {
       .reverse()
       .map((letter, index) => {
 
-        console.log('index! ', index)
-
         if (index === 0)
           return letter
 

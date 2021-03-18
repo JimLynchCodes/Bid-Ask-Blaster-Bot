@@ -3,7 +3,6 @@ import { Injectable } from '@angular/core';
 import { HttpHeaders, HttpClient } from '@angular/common/http';
 import { environment } from 'src/environments/environment';
 import { BehaviorSubject } from 'rxjs';
-import { promise } from 'protractor';
 
 const tokenEndpoint = 'https://api.tdameritrade.com/v1/oauth2/token'
 
@@ -13,7 +12,15 @@ const getOrdersEndpoint = 'https://api.tdameritrade.com/v1/accounts?fields=order
 
 const getQuotesEndpoint = 'https://api.tdameritrade.com/v1/marketdata/GME/quotes'
 
+const getQuotesEndpointBase = 'https://api.tdameritrade.com/v1/marketdata/'
+
 const accountsBaseEndpoint = 'https://api.tdameritrade.com/v1/accounts'
+
+export enum BuyOrSell {
+  Buy = 'Buy',
+  Sell = 'Sell',
+  Waiting = 'Waiting'
+}
 
 enum TdTokenStatus {
   missing_tokens = 'missing_tokens',
@@ -102,9 +109,9 @@ export class TdApiService {
     this.refreshToken = localStorage.getItem('r_token')
     this.refreshTokenExpiryDate = new Date(parseInt(localStorage['r_ex_date'], 10));
 
-    console.log('a_expiry date:, ', this.accessTokenExpiryDate)
-    console.log('r_expiry date:, ', this.refreshTokenExpiryDate)
-    console.log('c_expiry date:, ', now)
+    // console.log('a_expiry date:, ', this.accessTokenExpiryDate)
+    // console.log('r_expiry date:, ', this.refreshTokenExpiryDate)
+    // console.log('c_expiry date:, ', now)
 
 
     if (!this.accessToken && !this.refreshToken)
@@ -151,7 +158,6 @@ export class TdApiService {
 
   async handleNewSuccessfulLogin(callbackCode: string = ''): Promise<void> {
     return this.callWithCodeForAccessAndRefreshTokens(callbackCode)
-
   }
 
   private async callWithRefreshTokenForNewAccessToken(refreshToken: string): Promise<void> {
@@ -241,18 +247,9 @@ export class TdApiService {
       localStorage.setItem('a_token', accessToken)
       localStorage.setItem('a_ex_time', accessTokenExpirationTime)
 
-      console.log('accessTokenExpirationTime: ', accessTokenExpirationTime)
-      console.log('now.getTime(): ', now.getTime())
       const accessTokenExpiryDate = new Date(now.getTime() + accessTokenExpirationTime * 1000)
 
-      // const accessTokenExpiryTime = 
-
-      // accessTokenExpiryDate.setSeconds(accessTokenExpiryDate.getSeconds() + accessTokenExpirationTime)
-
-      // localStorage.setItem('a_ex_iso_date', accessTokenExpiryDate.toISOString())
-
       localStorage['a_ex_date'] = '' + accessTokenExpiryDate.getTime();
-      console.log('setting a_ex_date: ', '' + accessTokenExpiryDate.getTime())
 
       this.accessToken = accessToken
       this.accessTokenExpiryDate = accessTokenExpiryDate
@@ -263,18 +260,56 @@ export class TdApiService {
       localStorage.setItem('r_token', refreshToken)
       localStorage.setItem('r_ex_time', refreshTokenExpirationTime)
 
-      console.log('got refresh time: ', refreshTokenExpirationTime)
+      // console.log('got refresh time: ', refreshTokenExpirationTime)
 
       const refreshTokenExpiryDate = new Date(now.getTime() + refreshTokenExpirationTime * 1000)
 
       localStorage['r_ex_date'] = '' + refreshTokenExpiryDate.getTime();
-      console.log('setting r_ex_date: ', '' + refreshTokenExpiryDate.getTime())
 
       this.refreshToken = refreshToken
       this.refreshTokenExpiryDate = refreshTokenExpiryDate
-      console.log('saved r token!')
     }
 
+  }
+
+  // returns positions
+  async getPositions(): Promise<any> {
+
+    console.log('refreshing positions...')
+
+    const tokenStatus = await this.getCurrentTokenStatus();
+    await this.getNewTokensIfNecessary(tokenStatus)
+
+    if (tokenStatus !== TdTokenStatus.missing_tokens && tokenStatus !== TdTokenStatus.both_tokens_expired) {
+
+      const positionsHeaders = new HttpHeaders({
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.accessToken}`
+      })
+
+      if (!this.currentlyCallingForNewAccessToken) {
+
+        if (this.accessToken) {
+
+          return new Promise(resolve => {
+            this.http.get(getPositionEndpoint, { headers: positionsHeaders }).subscribe((positions: any) => {
+
+              const positionsWithFreeCash = positions.map(position => {
+                position.securitiesAccount.freeCash = position.securitiesAccount?.currentBalances?.cashBalance
+                  || position?.securitiesAccount?.currentBalances?.cashAvailableForTrading;
+                return position;
+              })
+
+              resolve(positionsWithFreeCash)
+            })
+          })
+        } else {
+          console.log('Error, trying to call with no access token!')
+        }
+      } else {
+        console.log('Currently calling for access token!')
+      }
+    }
   }
 
   async refreshPositions(): Promise<void> {
@@ -313,6 +348,41 @@ export class TdApiService {
     }
   }
 
+  async getWorkingOrders(): Promise<any> {
+    const tokenStatus = await this.getCurrentTokenStatus();
+    await this.getNewTokensIfNecessary(tokenStatus)
+
+    if (tokenStatus !== TdTokenStatus.missing_tokens && tokenStatus !== TdTokenStatus.both_tokens_expired) {
+
+      const ordersHeaders = new HttpHeaders({
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.accessToken}`
+      })
+
+      if (!this.currentlyCallingForNewAccessToken) {
+
+        if (this.accessToken) {
+          return new Promise(resolve => {
+            this.http.get(getOrdersEndpoint, { headers: ordersHeaders }).subscribe((orders: any) => {
+
+              console.log('got orders: ', orders)
+
+              resolve(orders)
+            })
+          })
+        } else {
+          console.log('Error, trying to call with no access token!')
+        }
+      } else {
+        console.log('Currently callingf or access token!')
+      }
+
+    }
+    else {
+      console.log('can\'t refresh positions! ', tokenStatus)
+    }
+  }
+
   async refreshOrders(): Promise<void> {
 
     console.log('refreshing orders...')
@@ -339,6 +409,44 @@ export class TdApiService {
 
               this.orders.next(orders);
               resolve()
+            })
+          })
+        } else {
+          console.log('Error, trying to call with no access token!')
+        }
+      } else {
+        console.log('Currently callingf or access token!')
+      }
+
+    }
+    else {
+      console.log('can\'t refresh positions! ', tokenStatus)
+    }
+  }
+
+  async getQuotes(symbol: string) {
+    console.log('refreshing quotes...')
+
+    const tokenStatus = await this.getCurrentTokenStatus();
+    await this.getNewTokensIfNecessary(tokenStatus)
+
+    if (tokenStatus !== TdTokenStatus.missing_tokens && tokenStatus !== TdTokenStatus.both_tokens_expired) {
+
+      const ordersHeaders = new HttpHeaders({
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.accessToken}`
+      })
+
+      if (!this.currentlyCallingForNewAccessToken) {
+
+        if (this.accessToken) {
+          return new Promise(resolve => {
+            this.http.get(getQuotesEndpointBase + symbol + '/quotes', { headers: ordersHeaders }).subscribe((orders: any) => {
+
+              console.log('got quotes: ', orders)
+
+              // this.quotes.next(orders);
+              resolve(orders);
             })
           })
         } else {
@@ -393,7 +501,7 @@ export class TdApiService {
     }
   }
 
-  async placeHardcodedOrder() {
+  async placeHardcodedOrder(ticker: string, buyPrice: number) {
 
     const placeOrderEndpoint = `https://api.tdameritrade.com/v1/accounts/${this.accountId}/orders`
 
@@ -441,38 +549,187 @@ export class TdApiService {
 
   }
 
-  async cancelOrdersForTicker(ticker: string) {
+  async placeLimitOrder(buyOrSell: BuyOrSell, ticker: string, price: number, qty: number, account: string) {
 
-    const selectedAccountId = ''
+    const placeOrderEndpoint = `https://api.tdameritrade.com/v1/accounts/${account}/orders`
 
+    const requestBody = {
+      price,
+      "orderType": "LIMIT",
+      "session": "NORMAL",
+      "duration": "GOOD_TILL_CANCEL",
+      "orderStrategyType": "SINGLE",
+      "orderLegCollection": [
+        {
+          "instruction": buyOrSell,
+          "quantity": qty,
+          "instrument": {
+            "symbol": ticker,
+            "assetType": "EQUITY"
+          }
+        }
+      ]
+    }
 
-    console.log('cancelling orders: ', this.currentWorkingOrders)
+    const ordersHeaders = new HttpHeaders({
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${this.accessToken}`
+    })
 
-    // const ordersToCancel = []
+    if (!this.currentlyCallingForNewAccessToken) {
 
+      if (this.accessToken) {
 
+        try {
+          const placeOrderResult = await this.http.post(placeOrderEndpoint, requestBody, { headers: ordersHeaders }).toPromise();
+          console.log('order placed! ', placeOrderResult)
 
-    // return promise.all(ordersToCancel.map(order => this.cancelOrder(order)));
+          return placeOrderResult;
+
+        }
+        catch (err) {
+          console.log('err placing order! ', err)
+
+        }
+      } else {
+        console.log('Error, trying to call with no access token!')
+      }
+    } else {
+      console.log('Currently callingf or access token!')
+    }
+
 
   }
 
-  async cancelOrder(order: any) {
+  getSharesOfUnderlyingCurrentlyHeld(underlyingChoice: string, accountsData: any, selectedAccount: any): number {
+    console.log('accountsData: ' + accountsData)
+    console.log('trying to get shares held for ' + underlyingChoice)
+
+    let qty = 0
+
+    console.log('accounts data: ', accountsData)
+
+    accountsData.forEach(account => {
+      if (account.securitiesAccount.accountId === selectedAccount) {
+
+        if (account.securitiesAccount.positions) {
+
+          account.securitiesAccount.positions.forEach(position => {
+
+            if (position.instrument.symbol === underlyingChoice) {
+              qty = position.longQuantity;
+            }
+          })
+        }
+      }
+    })
+
+    return qty;
+  }
+
+  getWorkingOrdersDataForTicker(currentOrders: any, selectedAccount: any, underlyingChoice: string) {
+
+    let sharesOfUnderlyingToBuy = 0;
+    let priceOfUnderlyingToBuy = 0;
+    let sharesOfUnderlyingToSell = 0;
+    let priceOfUnderlyingToSell = 0;
+
+    console.log('orders: ', currentOrders)
+
+    currentOrders.forEach(account => {
+      if (account.securitiesAccount.accountId === selectedAccount) {
+
+        if (account.securitiesAccount.orderStrategies) {
+
+          account.securitiesAccount.orderStrategies.forEach(order => {
+
+            if (order.status === 'QUEUED' || order.status === 'WORKING' && order.orderLegCollection) {
+
+              order.orderLegCollection.forEach(orderDetails => {
+
+                if (orderDetails.instrument.assetType === 'EQUITY' &&
+                  orderDetails.instrument.symbol === underlyingChoice) {
+
+                  if (orderDetails.instruction === 'SELL') {
+
+                    sharesOfUnderlyingToSell = orderDetails.quantity;
+                    priceOfUnderlyingToSell = order.price;
+                  }
+
+                  if (orderDetails.instruction === 'BUY') {
+                    sharesOfUnderlyingToBuy = orderDetails.quantity;
+                    priceOfUnderlyingToBuy = order.price;
+                  }
+
+                }
+              })
+            }
+          })
+        }
+      }
+    })
+
+    console.log('shares to sell: ', sharesOfUnderlyingToSell)
+    console.log('price to sell: ', priceOfUnderlyingToSell)
+
+    return {
+      sharesOfUnderlyingToBuy,
+      priceOfUnderlyingToBuy,
+      sharesOfUnderlyingToSell,
+      priceOfUnderlyingToSell,
+    }
+  }
+
+  getIdsOfOrdersToCancel(currentOrders: any, selectedAccount: any, underlyingChoice: string) {
+
+    const ids = []
+
+    currentOrders.forEach(account => {
+      if (account.securitiesAccount.accountId === selectedAccount) {
+
+        if (account.securitiesAccount.orderStrategies) {
+
+          account.securitiesAccount.orderStrategies.forEach(order => {
+
+            if (order.status === 'QUEUED' || order.status === 'WORKING' && order.orderLegCollection) {
+
+              order.orderLegCollection.forEach(orderDetails => {
+
+                if (orderDetails.instrument.assetType === 'EQUITY' &&
+                  orderDetails.instrument.symbol === underlyingChoice) {
+
+                  ids.push(order.orderId);
+
+                }
+              })
+            }
+          })
+        }
+      }
+    })
+
+    return ids;
+  }
+
+  async cancelOrders(idsOfOrdersToCancel: string[], account: string) {
+    return Promise.all(idsOfOrdersToCancel.map(orderId => this.cancelOrder(orderId, account)))
+  }
+
+  async cancelOrder(orderId: string, account: string) {
 
     const cancelOrderHeaders = new HttpHeaders({
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${this.accessToken}`
     })
 
-    const cancelOrderEndpoint = `${accountsBaseEndpoint}/${order.accountId}/orders/${order.orderId}`
+    const cancelOrderEndpoint = `${accountsBaseEndpoint}/${account}/orders/${orderId}`
 
-    console.log('calling to cancel order: ', order.orderId)
+    console.log('calling to cancel order: ', orderId)
 
     return new Promise(resolve => {
       this.http.delete(cancelOrderEndpoint, { headers: cancelOrderHeaders }).subscribe((response: any) => {
 
         console.log('cancelled order! ', response)
-
-        // this.orders.next(orders);
 
         this.refreshOrders();
 

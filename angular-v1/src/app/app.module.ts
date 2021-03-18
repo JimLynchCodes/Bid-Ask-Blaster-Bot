@@ -9,8 +9,6 @@ import { TooltipModule } from 'ngx-bootstrap/tooltip';
 import { ModalModule } from 'ngx-bootstrap/modal';
 import { HttpClientModule } from '@angular/common/http';
 import { AlertModule } from 'ngx-bootstrap/alert';
-import { NewsFeedPageComponent } from './old-pages/news-feed-page/news-feed-page.component';
-import { SettingsPageComponent } from './old-pages/settings-page/settings-page.component';
 import { FooterNavComponent } from './components/footer-nav/footer-nav.component';
 import { TradeBotPageComponent } from './pages/trade-bot-page/trade-bot-page.component';
 import { RouterModule } from '@angular/router';
@@ -34,8 +32,6 @@ import { BsDropdownModule } from 'ngx-bootstrap/dropdown';
 @NgModule({
   declarations: [
     AppComponent,
-    NewsFeedPageComponent,
-    SettingsPageComponent,
     FooterNavComponent,
     TradeBotPageComponent,
     NewsFeedItemComponent,

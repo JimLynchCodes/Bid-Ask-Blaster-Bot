@@ -19,7 +19,6 @@ export class AskPlaceTradeModalService {
 
     confirm(position): Observable<any> {
 
-        console.log('opening popup with position: ', position)
         this.positionSelected = position
 
         const initialState = {

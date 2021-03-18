@@ -1,16 +1,15 @@
 
 import { Component, ViewChild } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { TdApiService } from '../../services/td-api/td-api.service';
+import { TdApiService, BuyOrSell } from '../../services/td-api/td-api.service';
 import { ToastManagerService } from '../../services/toast-manager/toast-manager.service';
 import { BsModalService } from 'ngx-bootstrap/modal';
 import { EnableGainslockerModalService } from '../../components/modals/enable-gainslock-confirm/enable-gainslock-modal.service';
 import { AskCancelOrderModalService } from '../../components/modals/ask-cancel-order/ask-cancel-order-modal.service';
-import { CancelOrderOptions } from 'src/app/components/modals/ask-cancel-order/cancel-order.model';
 import { AskPlaceTradeModalService } from 'src/app/components/modals/ask-place-trade/ask-place-trade-modal.service';
-import { CommonModule } from '@angular/common';
-import { interval, from } from 'rxjs';
-import { mergeMap, merge, timeout, switchMap } from 'rxjs/operators';
+import { interval } from 'rxjs';
+import { decideLimitPrice } from 'src/app/services/limit-price-decider';
+import { decideBuyOrSell } from 'src/app/services/buy-or-sell-decider';
 
 const fakeBuyOrder1 = {
   quantity: 1,
@@ -117,14 +116,14 @@ export class TradeBotPageComponent {
 
   botIsRunning = false;
 
-  accountsData = []
+  positionsData = []
 
-  underlyingToTrade = 'GME'
+  // underlyingToTrade = 'GME'
   sharesOfUnderlyingCurrentlyHeld = 0
 
   selectTickerLabel = 'Select Ticker'
 
-  possibleTickers = ['GME', 'RKT', 'TSLA', 'QQQ']
+  possibleTickers = ['GME', 'RKT', 'ARKW', 'U', 'TWLO', 'TSLA', 'QQQ', 'BRO', 'TXN', 'WMT', 'UBER'];
 
   possibleBetSizes = ['1', '2', '3', '5', '10']
 
@@ -132,12 +131,55 @@ export class TradeBotPageComponent {
 
   name = 'Angular';
 
-  botThinkingMessage
+  botThinkingMessage = ''
+  cancelledOrdersMessage = ''
+  botOrderPlacedMessage = ''
+  worstPricePossibleMessage = ''
+  waitingMessage = ''
 
   lastQuotes = {};
 
+  defaultUnderlyingToTrade = 'TWLO'
+
+  underlyingChoice = this.defaultUnderlyingToTrade
+
+  defaultBetSize = '1'
+
+  selectedBetSize = this.defaultBetSize
+
+  selectedAccount: any = null;
+
+  radioData: any;
+
+  accountsData: any;
+
+  currentOrders: any;
+
+  sharesoOfUnderlyingToBuyWorkingOrders: number = 0;
+  priceOfUnderlyingToBuyWorkingOrders: number;
+
+  sharesoOfUnderlyingToSellWorkingOrders: number = 0;
+  priceOfUnderlyingToSellWorkingOrders: number;
+
   @ViewChild('undoToast') undoToast;
   @ViewChild('undoi') undi;
+
+  lookingToBuyOrSell: BuyOrSell = BuyOrSell.Waiting;
+
+  lastQuotesForUnderlying = {
+    '52WkLow': '--',
+    lowPrice: '--',
+    lastPrice: '--',
+    bidPrice: '--',
+    mark: '--',
+    askPrice: '--',
+    highPrice: '--',
+    '52WkHigh': '--'
+  }
+
+  limitPriceToPlace: number;
+  prevPlacedLimitPrice: number;
+  prevPlacedBuyOrSell: BuyOrSell;
 
   constructor(private http: HttpClient,
     private tdApiSvc: TdApiService,
@@ -174,6 +216,11 @@ export class TradeBotPageComponent {
     console.log('stopping bot')
     this.botIsRunning = false;
 
+    this.limitPriceToPlace = null;
+    this.prevPlacedLimitPrice = null;
+    this.prevPlacedBuyOrSell = null;
+    this.lookingToBuyOrSell = BuyOrSell.Waiting
+
   }
 
   setUnderlyingSelection(selected) {
@@ -181,218 +228,87 @@ export class TradeBotPageComponent {
     this.selectTickerLabel = selected
   }
 
-
-  private async asyncThing(): Promise<any> {
-    return new Promise(async overallResolve => {
-      const promiseCheckPositions = () => new Promise((resolve) => {
-        setTimeout(() => {
-          this.botThinkingMessage = 'got current positions. refreshing quotes...'
-          resolve('all done')
-        }, 1000);
-      });
-
-      // const promiseCheckQuotes = () => new Promise((resolve) => {
-      //   setTimeout(() => {
-      //     this.botThinkingMessage = 'got current quotes. cancelling working orders...'
-      //     resolve('all done')
-      //   }, 1000);
-      // });
-
-      // const promiseCancelWorkingOrders = () => new Promise((resolve) => {
-      //   setTimeout(() => {
-      //     this.botThinkingMessage = 'cancelled working orders for GME. placing orders...'
-      //     resolve('all done')
-      //   }, 1000);
-      // });
-
-      const promisePlaceOrders = () => new Promise((resolve) => {
-
-        setTimeout(() => {
-          this.botThinkingMessage = `placed new order limit order at: ${this.lastQuotes['GME']['bidPrice']}! waiting...`
-          resolve('all done')
-        }, 1000);
-      });
-
-      this.botThinkingMessage = 'refreshing current positions...';
-
-      await promiseCheckPositions();
-      
-      // await promiseCheckQuotes();
-      
-      // await promiseCancelWorkingOrders();
-
-      await this.tdApiSvc.cancelOrdersForTicker('GME');
-
-      await promisePlaceOrders();
-
-      overallResolve()
-      // return timeout(200).toPromise()
-
-
-      // this.botThinkingMessage = 'bot is doing an async thing...'
-      // setTimeout(() => {
-      //   this.botThinkingMessage = 'bot is DONE doing an async thing.'
-      //   resolve('ok')
-      // }, 500)
-
-    })
-
-    // console.log('doing an async things')
-    // this.botThinkingMessage = 'bot is doing an async thign...'
-    // return interval(1000)
-    //   .pipe(timeout(200))
-    //   .toPromise()
-    // .subscribe(
-    //   value => console.log(value), // Will never be called.
-    //   err => console.log(err),
-    // return 'foo'
-  }
-
-
   ngOnInit() {
 
-    this.botInterval = interval(5000)
-      // .pipe(merge(from(this.asyncThing())))
+    this.botInterval = interval(3000)
       .subscribe(async x => {
 
-        await this.asyncThing()
-        // this.botThinkingMessage = 'bot is thinking! ' + x
-        console.log('Next: ', x)
+        this.lookingToBuyOrSell = BuyOrSell.Waiting;
+
+        console.log('3-- getting data!')
+
+        this.accountsData = await this.tdApiSvc.getPositions();
+
+        if (!this.accountsData) {
+          this.botThinkingMessage = `Waiting for accounts data to load...`;
+        }
+        else {
+
+          this.sharesOfUnderlyingCurrentlyHeld = this.tdApiSvc.getSharesOfUnderlyingCurrentlyHeld(this.underlyingChoice, this.accountsData, this.selectedAccount)
+
+          this.currentOrders = await this.tdApiSvc.getWorkingOrders();
+
+          const {
+            sharesOfUnderlyingToBuy,
+            priceOfUnderlyingToBuy,
+            sharesOfUnderlyingToSell,
+            priceOfUnderlyingToSell,
+          } = this.tdApiSvc.getWorkingOrdersDataForTicker(this.currentOrders, this.selectedAccount, this.underlyingChoice);
+
+          this.sharesoOfUnderlyingToBuyWorkingOrders = sharesOfUnderlyingToBuy
+          this.priceOfUnderlyingToBuyWorkingOrders = priceOfUnderlyingToBuy
+
+          this.sharesoOfUnderlyingToSellWorkingOrders = sharesOfUnderlyingToSell
+          this.priceOfUnderlyingToSellWorkingOrders = priceOfUnderlyingToSell
+
+          this.lastQuotes = await this.tdApiSvc.getQuotes(this.underlyingChoice);
+
+          console.log('quotes!!', this.lastQuotes)
+
+          if (this.lastQuotes)
+            this.lastQuotesForUnderlying = this.lastQuotes[this.underlyingChoice];
+
+          console.log('3-- is bot running? ', this.botIsRunning)
+
+          if (this.botIsRunning) {
+
+            this.lookingToBuyOrSell = decideBuyOrSell(this.sharesOfUnderlyingCurrentlyHeld, +this.selectedBetSize);
+
+            console.log('3-- deciding... ', this.prevPlacedLimitPrice)
+
+            const { limitPriceToPlace, midpoint, worstPossiblePrice } = decideLimitPrice(this.lookingToBuyOrSell, this.lastQuotesForUnderlying.bidPrice, this.lastQuotesForUnderlying.askPrice, this.prevPlacedLimitPrice, this.prevPlacedBuyOrSell);
+
+            this.limitPriceToPlace = limitPriceToPlace
+
+            this.botThinkingMessage = `Decided to place a ${this.lookingToBuyOrSell} order for ( ${this.selectedBetSize} ) share(s) of ${this.underlyingChoice}  @  $${this.limitPriceToPlace}...`;
+
+            const idsOfOrdersToCancel = this.tdApiSvc.getIdsOfOrdersToCancel(this.currentOrders, this.selectedAccount, this.underlyingChoice);
+
+            console.log('ids of orders to cancel: ', idsOfOrdersToCancel.length, idsOfOrdersToCancel)
+            const cancelResponse = await this.tdApiSvc.cancelOrders(idsOfOrdersToCancel, this.selectedAccount);
+
+            this.cancelledOrdersMessage = `Cancelled working order(s): ${JSON.stringify(idsOfOrdersToCancel)}.`;
+
+            const placeOrderResponse = await this.tdApiSvc.placeLimitOrder(this.lookingToBuyOrSell, this.underlyingChoice, this.limitPriceToPlace, +this.selectedBetSize, this.selectedAccount)
+
+            this.prevPlacedLimitPrice = this.limitPriceToPlace;
+            this.prevPlacedBuyOrSell = this.lookingToBuyOrSell;
+
+            console.log({ placeOrderResponse });
+
+            this.botOrderPlacedMessage = `Placed ${this.lookingToBuyOrSell} order for ( ${this.selectedBetSize} ) share(s) of ${this.underlyingChoice}  @  $${this.limitPriceToPlace}   🦾 `;
+
+            this.worstPricePossibleMessage = `(Not going ${this.lookingToBuyOrSell === BuyOrSell.Buy ? 'higher' : 'lower'} than the ${this.lookingToBuyOrSell === BuyOrSell.Buy ? 'MIN' : 'MAX'} of the midpoint (${midpoint}) and the midpoint ${this.lookingToBuyOrSell === BuyOrSell.Buy ? '-' : '+'} buffer: (${worstPossiblePrice}))`;
+
+            this.waitingMessage = `Prayin' for a fill, baby... 🙏`
+
+          }
+        }
       });
+  }
 
-    let x = 0;
-
-    // setAsyncInterval(async () => {
-    //   console.log('start');
-    //   x++
-
-
-
-    //   console.log('end');
-    // }, 2000);
-
-    const minTime = 10200
-
-    setInterval(() => {
-      if (this.suggestedBuyOrders.length < 10)
-        this.suggestedBuyOrders.push(fakeBuyOrder1)
-    }, minTime)
-
-    this.tdApiSvc.positions.subscribe(data => {
-
-      console.log('got positions data: ', data)
-
-      if (data.length > 0) {
-        this.gotTdData = true
-
-        console.log('current cash: ', data)
-
-        data.map(account => {
-
-          account.securitiesAccount.freeCash = Math.max(account.securitiesAccount.currentBalances.cashBalance, account.securitiesAccount.currentBalances.moneyMarketFund)
-
-        })
-
-        this.accountsData = data
-
-
-
-        this.portfolioTotalCash = '$' + data[0].securitiesAccount.currentBalances.cashAvailableForTrading
-        this.portfolioLongAssetsValue = '$' + data[0].securitiesAccount.currentBalances.longMarketValue
-
-        this.portfolioLongOptionsValue = '$' + data[0].securitiesAccount.currentBalances.longOptionMarketValue
-        this.portfolioShortOptionsValue = '$' + data[0].securitiesAccount.currentBalances.shortOptionMarketValue
-        this.portfolioTotalValue = '$' + data[0].securitiesAccount.currentBalances.liquidationValue
-
-        const sortedPositions = data[0].securitiesAccount.positions.sort((a, b) => +b.marketValue - +a.marketValue)
-
-        // sort by market value
-        this.currentCashPositions = sortedPositions.filter(p => p.instrument.symbol.includes('MMDA'))
-
-
-        const nonCashPositions = sortedPositions.filter(p => !p.instrument.symbol.includes('MMDA'))
-
-        this.currentEquityPositions = nonCashPositions.filter(p => !p.instrument.symbol.includes('_'))
-
-        this.currentOptionPositions = nonCashPositions.filter(p => p.instrument.symbol.includes('_'))
-
-        // ⓘ
-
-
-      } else {
-
-        console.log('setting cash positions to empty...')
-
-        this.currentOptionPositions = []
-        this.currentEquityPositions = []
-        this.currentCashPositions = []
-      }
-
-    }, err => {
-      console.log('err: ', err)
-    }, () => {
-      console.log('completed getting positions...')
-    })
-
-    this.tdApiSvc.orders.subscribe(data => {
-
-      console.log('got orders data', data)
-
-      if (data.length > 0) {
-        const currentOrders = data[0].securitiesAccount.orderStrategies || []
-
-        this.openBuyOrders = currentOrders.filter(o => o.orderLegCollection[0].instruction === 'BUY')
-        this.openSellOrders = currentOrders.filter(o => o.orderLegCollection[0].instruction === 'SELL')
-
-      }
-      else {
-        this.openBuyOrders = []
-        this.openSellOrders = []
-        // this.tdApiSvc.refreshOrders()
-      }
-
-    }, err => {
-      console.log('err getting orders: ', err)
-    }, () => {
-      console.log('completed getting orders...')
-    })
-
-    this.tdApiSvc.quotes.subscribe(data => {
-
-      console.log('got quotes data', data);
-
-      this.lastQuotes = data
-
-      // if (data.length > 0) {
-      //   const currentOrders = data[0].securitiesAccount.orderStrategies || []
-
-      //   this.openBuyOrders = currentOrders.filter(o => o.orderLegCollection[0].instruction === 'BUY')
-      //   this.openSellOrders = currentOrders.filter(o => o.orderLegCollection[0].instruction === 'SELL')
-
-      // }
-      // else {
-      //   this.openBuyOrders = []
-      //   this.openSellOrders = []
-      //   // this.tdApiSvc.refreshOrders()
-      // }
-
-    }, err => {
-      console.log('err getting quotes: ', err)
-    }, () => {
-      console.log('completed getting quotes...')
-    })
-
-    console.log('Trade Bot Page Component starting up!')
-
-
-    this.tdApiSvc.logoutWatcher.subscribe((loggedOut) => {
-      if (loggedOut)
-        this.gotTdData = false;
-    })
-
-    this.tdApiSvc.refreshData()
-
-
+  refreshUserCurrentWorkingOrders() {
+    throw new Error("Method not implemented.");
   }
 
   connectWithAccessTokenClick() {
@@ -444,40 +360,6 @@ export class TradeBotPageComponent {
 
   async placeTradeSuggestionClick(order, index) {
 
-    // console.log(`order ${JSON.stringify(order)} trade for`)
-    // console.log(`Now, sending a ${order.instruction} trade for ${order.quantity} shared of ${order.symbol}`)
-
-    // // await this.ordersService.placeOrder(order)
-
-    // this.toastSvc.addToast(
-    //   {
-    //     id: Math.floor(Math.random() * 10000),
-    //     type: 'success',
-    //     msg: `Bot Trade placed! ${order.quantity} shares of ${order.orderLegCollection[0].instrument.symbol} @ $${order.price} each.`,
-    //     timeout: 5000,
-    //     undo: (toast) => {
-
-    //       //DOTO - handle undo click
-
-    //       // this.toastSvc.toasts.push(toast)
-    //     }
-    //   });
-
-    // let tradeSuggestionObject
-
-    // console.log(order.instruction)
-    // if (order.orderLegCollection[0].instruction === 'BUY') {
-
-    //   console.log('splicing buys')
-    //   tradeSuggestionObject = this.suggestedBuyOrders.splice(index, 1);
-    // } else {
-    //   tradeSuggestionObject = this.suggestedSellOrders.splice(index, 1);
-    // }
-
-    // console.log(tradeSuggestionObject)
-
-    // asdas
-
     console.log('placing an order: ', order)
 
     this.placeOrderModalSvc.confirm(order)
@@ -496,22 +378,12 @@ export class TradeBotPageComponent {
           console.log('unrecognized answer from place order modal... ', placeOrderModalResponse.answer)
         }
 
-        // if (placeOrderModalResponse.answer.place === placeOrderOptions.place_order) {
-        //   console.log(' order!')
-        //   this.tdApiSvc.placeOrder(order);
-        // }
-
       });
 
 
   }
 
   async placeTradeSuggestionConfirmed(order, index) {
-
-    // console.log(`order ${JSON.stringify(order)} trade for`)
-    // console.log(`Now, sending a ${order.instruction} trade for ${order.quantity} shared of ${order.symbol}`)
-
-    // await this.ordersService.placeOrder(order)
 
     this.toastSvc.addToast(
       {
@@ -563,22 +435,10 @@ export class TradeBotPageComponent {
   enableGainsLockerSubmit() {
   }
 
-  cancelOrderClick(order, index) {
+  onUnderlyingToTradeChange(newUnderlyingToTrade: string) {
+    console.log('new unerlying to trade! '), newUnderlyingToTrade;
 
-    console.log('cancel order clicked: ', order);
-
-    this.cancelOrderModalSvc.confirm(order)
-      .subscribe((cancelOrderModalResponse) => {
-
-        console.log('returned from cancel order modal: ', cancelOrderModalResponse)
-
-        if (cancelOrderModalResponse.answer.cancel === CancelOrderOptions.cancel_order) {
-          console.log('cancelling order!')
-          this.tdApiSvc.cancelOrder(order);
-        }
-
-      });
-
+    console.log('under choice: ', this.underlyingChoice)
   }
 
 }

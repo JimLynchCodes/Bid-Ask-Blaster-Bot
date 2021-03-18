@@ -5,14 +5,20 @@
     <h4>
       Underlying To Trade
     </h4>
-    <p>
+    <p class="my-1">
       Select the underlying asset the bot will trade.
     </p>
+    <ng-container *ngIf="botIsRunning">
+      <p class="my-1 text-danger">
+        <i>Note: Underlying to trade cannot be changed while the bot is running.</i>
+      </p>
+    </ng-container>
 
     <ng-container *ngFor="let ticker of possibleTickers">
       <div class="form-check py-2">
-        <input class="form-check-input" type="radio" name="possibleTickersRadio" id="flexRadioDefault2"
-          [checked]="ticker === 'GME'">
+        <input class="form-check-input" type="radio" name="possibleTickersRadio" id="possibleTickersRadio"
+          value="{{ticker}}" [checked]="ticker === defaultUnderlyingToTrade" [disabled]="botIsRunning"
+          [(ngModel)]="underlyingChoice">
         <label class="form-check-label" for="flexRadioDefault2">
           <span class="card rounded px-1">
             {{ticker}}
@@ -28,14 +34,19 @@
     <h4>
       Bet Size
     </h4>
-    <p>
+    <p class="my-1">
       Choose how many shares the bot should trade for each order.
     </p>
+    <ng-container *ngIf="botIsRunning">
+      <p class="my-1 text-danger">
+        <i>Note: Bet size cannot be changed while the bot is running.</i>
+      </p>
+    </ng-container>
 
     <ng-container *ngFor="let betSize of possibleBetSizes">
       <div class="form-check py-2">
-        <input class="form-check-input" type="radio" name="betSizeRadio" id="flexRadioDefault5"
-          [checked]="betSize === '1'">
+        <input class="form-check-input" type="radio" name="betSizeRadio" id="betSizesInput" value="{{betSize}}"
+          [(ngModel)]="selectedBetSize" [checked]="betSize === defaultBetSize" [disabled]="botIsRunning">
         <label class="form-check-label" for="flexRadioDefault5">
           <span class="card rounded px-1">
             {{betSize}}
@@ -51,16 +62,20 @@
     <h4>
       Account To Use
     </h4>
-    <p>
+    <p class="my-1">
       Select the account which the bot will trade out of.
     </p>
-
-    <!-- {{accountsData[0] | json}} -->
+    <ng-container *ngIf="botIsRunning">
+      <p class="my-1 text-danger">
+        <i>Note: Account cannot be changed while the bot is running.</i>
+      </p>
+    </ng-container>
 
     <ng-container *ngFor="let account of accountsData">
       <div class="form-check py-3 ">
         <input class="form-check-input" type="radio" name="accountToUseRadio" id="flexRadioDefault2"
-          [disabled]="!account.securitiesAccount.isDayTrader">
+          [disabled]="botIsRunning || !account.securitiesAccount.isDayTrader"
+          value="{{account.securitiesAccount.accountId}}" [(ngModel)]="selectedAccount">
         <label class="form-check-label" for="flexRadioDefault2">
           <div class="card border border-primary rounded px-2 py-2">
             {{account.securitiesAccount.accountId | pMask}}
@@ -72,13 +87,14 @@
             <br />
             Cash: ${{account.securitiesAccount.freeCash | moneyWithCommas}}
             <br />
-            Shares of {{underlyingToTrade}}: {{sharesOfUnderlyingCurrentlyHeld}}
+            <ng-container *ngIf="account.securitiesAccount.accountId === selectedAccount">
+              Shares of {{underlyingChoice}}: {{sharesOfUnderlyingCurrentlyHeld}}
+            </ng-container>
             <br />
           </div>
         </label>
       </div>
     </ng-container>
-
 
     <div class="card-body p-x1 py-1 mt-1 d-flex flex flex-grow-1 flex-row justify-content-around text-center">
 
@@ -91,13 +107,19 @@
       The bot is currently: {{ botIsRunning ? "Running!" : "NOT running."}}
     </h4>
 
-    <div class="card-body p-x1 py-1 mt-1 d-flex flex flex-grow-1 flex-row justify-content-around text-center">
+    <div class="card-body px-2 py-2 mt-1 d-flex flex flex-grow-1 flex-column text-center">
 
       <ng-container *ngIf="!botIsRunning">
-        <button type="button" class="btn btn-success btn-sm" (click)="startBotRunning()"
-          tooltip="Starts the bot running!">
+        <button type="button" class="btn btn-success btn-sm" (click)="startBotRunning()" [disabled]="!selectedAccount"
+          data-html="true"
+          tooltip="WARNING: Clicking this button will start the bot trading WITH REAL MONEY in your account. By clicking Start you agree to take full responsibility for any losses incurred.">
           Start
         </button>
+        <ng-container *ngIf="!selectedAccount">
+          <h5 class="my-4 text-danger">
+            Please select an account for the bot to use before starting!
+          </h5>
+        </ng-container>
       </ng-container>
 
       <ng-container *ngIf="botIsRunning">
@@ -108,36 +130,70 @@
     </div>
   </div>
 
-  <div class="card border border-primary rounded flex-grow-1 h-auto text-dark flex-column m-4 px-4 py-4"
-    *ngIf="botIsRunning">
+  <div class="card border border-primary rounded flex-grow-1 h-auto text-dark flex-column m-4 px-4 py-4">
 
     <div class="d-flex flex-row justify-content-between">
 
       <div>
-        bot is running on:
-        <h4>
-          <!-- {{selectTickerLabel}} -->
-          GME
-        </h4>
+        <ng-container *ngIf="botIsRunning">
+
+          <p class="my-1">
+            <p>🔨&nbsp; Bot is running! &nbsp; 🔨👷<br /></p>
+
+            <ng-container *ngIf="lookingToBuyOrSell !== 'Waiting'">
+              <p class="my-1">
+                Bot is looking to {{lookingToBuyOrSell}} {{this.underlyingChoice}}
+              </p>
+            </ng-container>
+
+        </ng-container>
+
+        <ng-container *ngIf="!botIsRunning">
+          <p>Bot is sleeping. 😴</p>
+          <p> ⬆️&nbsp;&nbsp;&nbsp;Click the start button to run it!&nbsp;&nbsp;⬆️</p>
+        </ng-container>
+
+        <br />
+        <h6>
+          selected ticker: {{underlyingChoice}}
+        </h6>
+
+        <ng-container *ngIf="selectedAccount">
+          <h6>
+            shares owned: {{sharesOfUnderlyingCurrentlyHeld}}
+          </h6>
+        </ng-container>
+        <ng-container *ngIf="!selectedAccount">
+          (no account selected)
+        </ng-container>
       </div>
-    
+
       <div>
-        Session P/L:
+        Session P/L
         <h4>
           $0.00
         </h4>
       </div>
-    
-      
     </div>
-
     <br />
 
-    {{botThinkingMessage}}
+    <ng-container *ngIf="botIsRunning && lookingToBuyOrSell === 'Waiting'">
+      <p>Bot is thinking...</p>
+    </ng-container>
+
+    <p>{{botThinkingMessage}}</p>
+
+    <p>{{cancelledOrdersMessage}}</p>
+
+    <p>{{botOrderPlacedMessage}}</p>
+
+    <p>{{worstPricePossibleMessage}}</p>
+
+    <p>{{waitingMessage}}</p>
 
     <br />
     <br />
-    
+
     <div class="border-top border-primary my-2"></div>
     <br />
     <table class="table table-bordered border-primary">
@@ -151,12 +207,31 @@
       <tbody>
         <tr>
           <th scope="col">Qty & Price</th>
-          <td>1&nbsp;&nbsp;@&nbsp;&nbsp;$322.05</td>
-          <td> -- </td>
+
+          <ng-container *ngIf="sharesoOfUnderlyingToBuyWorkingOrders === 0">
+            <td>--</td>
+          </ng-container>
+
+          <ng-container *ngIf="sharesoOfUnderlyingToBuyWorkingOrders !== 0">
+            <td>
+              {{sharesoOfUnderlyingToBuyWorkingOrders}}&nbsp;&nbsp;@&nbsp;&nbsp;{{priceOfUnderlyingToBuyWorkingOrders}}
+            </td>
+          </ng-container>
+
+          <ng-container *ngIf="sharesoOfUnderlyingToSellWorkingOrders === 0">
+            <td>--</td>
+          </ng-container>
+
+          <ng-container *ngIf="sharesoOfUnderlyingToSellWorkingOrders !== 0">
+            <td>
+              {{sharesoOfUnderlyingToSellWorkingOrders}}&nbsp;&nbsp;@&nbsp;&nbsp;{{priceOfUnderlyingToSellWorkingOrders}}
+            </td>
+          </ng-container>
+
         </tr>
       </tbody>
     </table>
-    
+
     <div class="border-top border-primary my-2"></div>
     <br />
 
@@ -164,46 +239,31 @@
       <thead>
         <tr>
           <th scope="col">Realtime<br />Quotes</th>
-          <th scope="col">52w<br/>Low</th>
+          <th scope="col">52w<br />Low</th>
           <th scope="col">Day Low</th>
           <th scope="col">Bid</th>
           <th scope="col">Last</th>
           <th scope="col">Mark</th>
           <th scope="col">Ask</th>
           <th scope="col">Day High</th>
-          <th scope="col">52w<br/>High</th>
+          <th scope="col">52w<br />High</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <th scope="row">GME</th>
-          <!-- <td>{{lastQuotes['GME'] | json}}</td> -->
-          <td>{{lastQuotes['GME']['52WkLow']}}</td>
-          <td>{{lastQuotes['GME']['lowPrice']}}</td>
-          <td>{{lastQuotes['GME']['bidPrice']}}</td>
-          <td>{{lastQuotes['GME']['lastPrice']}}</td>
-          <td>{{lastQuotes['GME']['mark']}}</td>
-          <td>{{lastQuotes['GME']['askPrice']}}</td>
-          <td>{{lastQuotes['GME']['highPrice']}}</td>
-          <td>{{lastQuotes['GME']['52WkHigh']}}</td>
+          <th scope="row">{{underlyingChoice}}</th>
+          <td>{{lastQuotesForUnderlying['52WkLow']}}</td>
+          <td>{{lastQuotesForUnderlying['lowPrice']}}</td>
+          <td>{{lastQuotesForUnderlying['bidPrice']}}</td>
+          <td>{{lastQuotesForUnderlying['lastPrice']}}</td>
+          <td>{{lastQuotesForUnderlying['mark']}}</td>
+          <td>{{lastQuotesForUnderlying['askPrice']}}</td>
+          <td>{{lastQuotesForUnderlying['highPrice']}}</td>
+          <td>{{lastQuotesForUnderlying['52WkHigh']}}</td>
         </tr>
 
-        <!-- <tr>
-          <th scope="row">Working<br/>Orders</th> -->
-        <!-- <th scope="row">2</th> -->
-        <!-- <td>Jacob</td>
-          <td>Thornton</td>
-          <td>@fat</td>
-        </tr> -->
-        <!-- <tr>
-          <th scope="row">3</th>
-          <td>Larry</td>
-          <td>the Bird</td>
-          <td>@twitter</td>
-        </tr> -->
       </tbody>
     </table>
-
 
   </div>
 
