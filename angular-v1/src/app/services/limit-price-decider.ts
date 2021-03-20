@@ -6,8 +6,7 @@ import { BuyOrSell } from './td-api/td-api.service';
  */
 export const minCentsBuffer = 0.05;
 
-export function decideLimitPrice(buyOrSell: BuyOrSell, currentBid, currentAsk, prevPlacedLimitPrice, prevPlacedBuyOrSell,
-    currentMark = null, currentLast = null, prevAsk = null, prevBid = null) {
+export function decideLimitPrice(buyOrSell: BuyOrSell, currentBid, currentAsk, prevPlacedLimitPrice, prevBid, prevAsk) {
 
     const currentMidPoint = +((currentBid + currentAsk) / 2).toFixed(2);
 
@@ -21,9 +20,12 @@ export function decideLimitPrice(buyOrSell: BuyOrSell, currentBid, currentAsk, p
 
     if (buyOrSell === BuyOrSell.Buy) {
 
-        if (!prevPlacedLimitPrice) {
+        if (!prevPlacedLimitPrice)
             decidedOn = currentBid;
-        }
+
+        if (currentBid < prevBid)
+            decidedOn = currentBid
+
         else {
             const oneCentMore = prevPlacedLimitPrice + 0.01;
             worstPossiblePrice = +(currentMidPoint - minCentsBuffer).toFixed(2);
@@ -38,9 +40,14 @@ export function decideLimitPrice(buyOrSell: BuyOrSell, currentBid, currentAsk, p
 
         console.log('3-- it\'s a sell order...')
 
-        if (!prevPlacedLimitPrice) {
+        if (!prevPlacedLimitPrice)
             decidedOn = currentAsk;
-        }
+
+        if (currentAsk > prevAsk)
+            decidedOn = currentAsk
+
+        // TODO - make sure you aren't selling it lower than what you paid for it...
+
         else {
             const oneCentLess = prevPlacedLimitPrice - 0.01;
             worstPossiblePrice = +(currentMidPoint + minCentsBuffer).toFixed(2)

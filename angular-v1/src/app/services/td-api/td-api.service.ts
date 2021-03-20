@@ -445,7 +445,6 @@ export class TdApiService {
 
               console.log('got quotes: ', orders)
 
-              // this.quotes.next(orders);
               resolve(orders);
             })
           })
@@ -546,7 +545,6 @@ export class TdApiService {
       console.log('Currently callingf or access token!')
     }
 
-
   }
 
   async placeLimitOrder(buyOrSell: BuyOrSell, ticker: string, price: number, qty: number, account: string) {
@@ -584,7 +582,7 @@ export class TdApiService {
           const placeOrderResult = await this.http.post(placeOrderEndpoint, requestBody, { headers: ordersHeaders }).toPromise();
           console.log('order placed! ', placeOrderResult)
 
-          return placeOrderResult;
+          return true;
 
         }
         catch (err) {
@@ -595,7 +593,7 @@ export class TdApiService {
         console.log('Error, trying to call with no access token!')
       }
     } else {
-      console.log('Currently callingf or access token!')
+      console.log('Currently calling for access token!')
     }
 
 
@@ -625,6 +623,34 @@ export class TdApiService {
     })
 
     return qty;
+  }
+
+  getPlForUnderlyingSelected(underlyingChoice: string, accountsData: any, selectedAccount: any): any {
+
+    let currentUnderlyingDayPlDollars = '$0.00'
+    let currentUnderlyingDayPlPercentage = '0.00%'
+
+    accountsData.forEach(account => {
+      if (account.securitiesAccount.accountId === selectedAccount) {
+
+        if (account.securitiesAccount.positions) {
+          
+          account.securitiesAccount.positions.forEach(position => {
+
+           if (position.instrument.symbol === underlyingChoice) {   
+                currentUnderlyingDayPlDollars = '$' + position.currentDayProfitLoss.toFixed(2);
+                currentUnderlyingDayPlPercentage = position.currentDayProfitLossPercentage.toFixed(2) + '%';
+            }
+          })
+        }
+      }
+
+    })
+
+    return {
+      currentUnderlyingDayPlDollars,
+      currentUnderlyingDayPlPercentage
+    }
   }
 
   getWorkingOrdersDataForTicker(currentOrders: any, selectedAccount: any, underlyingChoice: string) {

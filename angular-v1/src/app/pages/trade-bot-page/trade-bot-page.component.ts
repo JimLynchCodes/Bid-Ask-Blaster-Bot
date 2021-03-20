@@ -123,7 +123,7 @@ export class TradeBotPageComponent {
 
   selectTickerLabel = 'Select Ticker'
 
-  possibleTickers = ['GME', 'RKT', 'ARKW', 'U', 'TWLO', 'TSLA', 'QQQ', 'BRO', 'TXN', 'WMT', 'UBER'];
+  possibleTickers = ['GME', 'TDOC', 'Z', 'FATE', 'AMC', 'PLUG', 'NIO', 'PLTR', 'AMZN', 'TWTR', 'GOOG', 'ARKW', 'U', 'TWLO', 'TSLA', 'QQQ', 'BRO', 'TXN', 'WMT', 'UBER'];
 
   possibleBetSizes = ['1', '2', '3', '5', '10']
 
@@ -176,10 +176,23 @@ export class TradeBotPageComponent {
     highPrice: '--',
     '52WkHigh': '--'
   }
+  prevQuotesForUnderlying = {
+    '52WkLow': '--',
+    lowPrice: '--',
+    lastPrice: '--',
+    bidPrice: '--',
+    mark: '--',
+    askPrice: '--',
+    highPrice: '--',
+    '52WkHigh': '--'
+  }
 
   limitPriceToPlace: number;
   prevPlacedLimitPrice: number;
   prevPlacedBuyOrSell: BuyOrSell;
+
+  currentUnderlyingDayPlDollars;
+  currentUnderlyingDayPlPercentage;
 
   constructor(private http: HttpClient,
     private tdApiSvc: TdApiService,
@@ -206,7 +219,6 @@ export class TradeBotPageComponent {
     console.log('undoing last action...');
   }
 
-
   startBotRunning() {
     console.log('starting bot')
     this.botIsRunning = true;
@@ -219,8 +231,7 @@ export class TradeBotPageComponent {
     this.limitPriceToPlace = null;
     this.prevPlacedLimitPrice = null;
     this.prevPlacedBuyOrSell = null;
-    this.lookingToBuyOrSell = BuyOrSell.Waiting
-
+    this.lookingToBuyOrSell = BuyOrSell.Waiting;
   }
 
   setUnderlyingSelection(selected) {
@@ -243,8 +254,15 @@ export class TradeBotPageComponent {
           this.botThinkingMessage = `Waiting for accounts data to load...`;
         }
         else {
-
           this.sharesOfUnderlyingCurrentlyHeld = this.tdApiSvc.getSharesOfUnderlyingCurrentlyHeld(this.underlyingChoice, this.accountsData, this.selectedAccount)
+
+          if (this.selectedAccount) {
+            console.log('3-- foo ', this.accountsData)
+            const { currentUnderlyingDayPlDollars, currentUnderlyingDayPlPercentage } = this.tdApiSvc.getPlForUnderlyingSelected(this.underlyingChoice, this.accountsData, this.selectedAccount)
+  
+            this.currentUnderlyingDayPlDollars = currentUnderlyingDayPlDollars;
+            this.currentUnderlyingDayPlPercentage = currentUnderlyingDayPlPercentage;
+        }
 
           this.currentOrders = await this.tdApiSvc.getWorkingOrders();
 
@@ -276,7 +294,7 @@ export class TradeBotPageComponent {
 
             console.log('3-- deciding... ', this.prevPlacedLimitPrice)
 
-            const { limitPriceToPlace, midpoint, worstPossiblePrice } = decideLimitPrice(this.lookingToBuyOrSell, this.lastQuotesForUnderlying.bidPrice, this.lastQuotesForUnderlying.askPrice, this.prevPlacedLimitPrice, this.prevPlacedBuyOrSell);
+            const { limitPriceToPlace, midpoint, worstPossiblePrice } = decideLimitPrice(this.lookingToBuyOrSell, this.lastQuotesForUnderlying.bidPrice, this.lastQuotesForUnderlying.askPrice, this.prevPlacedLimitPrice, this.prevQuotesForUnderlying.bidPrice, this.prevQuotesForUnderlying.askPrice);
 
             this.limitPriceToPlace = limitPriceToPlace
 
@@ -284,19 +302,28 @@ export class TradeBotPageComponent {
 
             const idsOfOrdersToCancel = this.tdApiSvc.getIdsOfOrdersToCancel(this.currentOrders, this.selectedAccount, this.underlyingChoice);
 
-            console.log('ids of orders to cancel: ', idsOfOrdersToCancel.length, idsOfOrdersToCancel)
-            const cancelResponse = await this.tdApiSvc.cancelOrders(idsOfOrdersToCancel, this.selectedAccount);
+            console.log('ids of orders to cancel: ', idsOfOrdersToCancel.length, idsOfOrdersToCancel);
 
-            this.cancelledOrdersMessage = `Cancelled working order(s): ${JSON.stringify(idsOfOrdersToCancel)}.`;
+            if (this.limitPriceToPlace === this.prevPlacedLimitPrice) {
+              console.log('same!')
 
-            const placeOrderResponse = await this.tdApiSvc.placeLimitOrder(this.lookingToBuyOrSell, this.underlyingChoice, this.limitPriceToPlace, +this.selectedBetSize, this.selectedAccount)
+              this.botOrderPlacedMessage = `NOT Placing a ${this.lookingToBuyOrSell} order for ( ${this.selectedBetSize} ) share(s) of ${this.underlyingChoice}  @  $${this.limitPriceToPlace} - that order is already waiting to be filled... `;
+            }
+            else {
 
-            this.prevPlacedLimitPrice = this.limitPriceToPlace;
-            this.prevPlacedBuyOrSell = this.lookingToBuyOrSell;
+              const cancelResponse = await this.tdApiSvc.cancelOrders(idsOfOrdersToCancel, this.selectedAccount);
+              this.cancelledOrdersMessage = `Cancelled working order(s): ${JSON.stringify(idsOfOrdersToCancel)}.`;
+              const placeOrderResponse = await this.tdApiSvc.placeLimitOrder(this.lookingToBuyOrSell, this.underlyingChoice, this.limitPriceToPlace, +this.selectedBetSize, this.selectedAccount)
 
-            console.log({ placeOrderResponse });
+              this.prevPlacedLimitPrice = this.limitPriceToPlace;
+              this.prevPlacedBuyOrSell = this.lookingToBuyOrSell;
 
-            this.botOrderPlacedMessage = `Placed ${this.lookingToBuyOrSell} order for ( ${this.selectedBetSize} ) share(s) of ${this.underlyingChoice}  @  $${this.limitPriceToPlace}   🦾 `;
+              this.prevQuotesForUnderlying = {...this.lastQuotesForUnderlying};
+
+              console.log({ placeOrderResponse });
+
+              this.botOrderPlacedMessage = `Placed ${this.lookingToBuyOrSell} order for ( ${this.selectedBetSize} ) share(s) of ${this.underlyingChoice}  @  $${this.limitPriceToPlace}   🦾 `;
+            }
 
             this.worstPricePossibleMessage = `(Not going ${this.lookingToBuyOrSell === BuyOrSell.Buy ? 'higher' : 'lower'} than the ${this.lookingToBuyOrSell === BuyOrSell.Buy ? 'MIN' : 'MAX'} of the midpoint (${midpoint}) and the midpoint ${this.lookingToBuyOrSell === BuyOrSell.Buy ? '-' : '+'} buffer: (${worstPossiblePrice}))`;
 
